@@ -94,7 +94,7 @@ resource "aws_instance" "webserver1" {
   vpc_security_group_ids = [aws_security_group.web-sg.id]
   subnet_id              = module.vpc.private_subnets[0]
   key_name               = "demo-key"
-  user_data              = file("install_apache.sh")
+  user_data              = file("install.sh")
   tags = {
     Name = "App Server"
   }
@@ -109,7 +109,7 @@ resource "aws_instance" "appserver1" {
   availability_zone      = "us-east-1a"
   vpc_security_group_ids = [aws_security_group.appserver-sg.id]
   subnet_id              = module.vpc.private_subnets[0]
-  user_data              = file("install_apache.sh")
+  user_data              = file("install.sh")
   key_name               = "demo-key"
   tags = {
     Name = "App Server 1"
@@ -124,7 +124,7 @@ resource "aws_instance" "appserver2" {
   vpc_security_group_ids = [aws_security_group.appserver-sg.id]
   subnet_id              = module.vpc.private_subnets[1]
   key_name               = "demo-key"
-  user_data              = file("install_apache.sh")
+  user_data              = file("install.sh")
   tags = {
     Name = "App Server 2"
   }
