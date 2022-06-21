@@ -1,0 +1,3 @@
+Further Enhancement
+We can also create an asg if required for both web and app.
+Also to store tf state we can use a remote backend to store it
