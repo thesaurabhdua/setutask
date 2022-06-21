@@ -9,7 +9,7 @@ terraform {
 
 # Configure the AWS Provider
 provider "aws" {
-  region = "us-east-1"
+  region = "ap-south-1"
 }
 
 
@@ -20,13 +20,12 @@ module "vpc" {
 
   cidr = "10.10.0.0/16"
 
-  azs             = ["us-east-1a", "us-east-1b"]
+  azs             = ["ap-south-1a", "ap-south-1b"]
   public_subnets  = ["10.10.1.0/24", "10.10.2.0/24"]
   private_subnets = ["10.10.3.0/24", "10.10.4.0/24" ]
   database_subnets = ["10.10.5.0/24", "10.10.6.0/24" ]
 
   enable_nat_gateway = true
-  single_nat_gateway   = true
   enable_dns_hostnames = true
   create_igw           = true
 }
@@ -52,6 +51,20 @@ resource "aws_security_group" "web-sg" {
     to_port     = 0
     protocol    = "-1"
     cidr_blocks = ["0.0.0.0/0"]
+  }
+  ingress {
+    description = "ssh from VPC"
+    from_port   = 22
+    to_port     = 22
+    protocol    = "tcp"
+    cidr_blocks = ["10.10.0.0/16"]
+  }
+
+  egress {
+    from_port   = 0
+    to_port     = 0
+    protocol    = "-1"
+    cidr_blocks = ["0.0.0.0/16"]
   }
 
   tags = {
@@ -79,24 +92,38 @@ resource "aws_security_group" "appserver-sg" {
     protocol    = "-1"
     cidr_blocks = ["0.0.0.0/0"]
   }
+  ingress {
+    description = "ssh from VPC"
+    from_port   = 22
+    to_port     = 22
+    protocol    = "tcp"
+    cidr_blocks = ["10.10.0.0/16"]
+  }
+
+  egress {
+    from_port   = 0
+    to_port     = 0
+    protocol    = "-1"
+    cidr_blocks = ["0.0.0.0/0"]
+  }
 
   tags = {
-    Name = "Webserver-SG"
+    Name = "appserver-SG"
   }
 }
 
 #Create EC2 Instance
 resource "aws_instance" "webserver1" {
-  ami                    = "ami-08d4ac5b634553e16"
+  ami                    = "ami-07eaf27c7c4a884cf"
   count                  = 1
   instance_type          = "t2.micro"
-  availability_zone      = "us-east-1a"
+  availability_zone      = "ap-south-1a"
   vpc_security_group_ids = [aws_security_group.web-sg.id]
   subnet_id              = module.vpc.private_subnets[0]
   key_name               = "demo-key"
-  user_data              = file("install.sh")
+  user_data              = "${file("./install-nginx.sh")}"
   tags = {
-    Name = "App Server"
+    Name = "Web Server"
   }
 
 }
@@ -104,12 +131,12 @@ resource "aws_instance" "webserver1" {
 
 #Create EC2 Instance
 resource "aws_instance" "appserver1" {
-  ami                    = "ami-08d4ac5b634553e16"
+  ami                    = "ami-07eaf27c7c4a884cf"
   instance_type          = "t2.micro"
-  availability_zone      = "us-east-1a"
+  availability_zone      = "ap-south-1a"
   vpc_security_group_ids = [aws_security_group.appserver-sg.id]
   subnet_id              = module.vpc.private_subnets[0]
-  user_data              = file("install.sh")
+  user_data              = "${file("./install-nginx.sh")}"
   key_name               = "demo-key"
   tags = {
     Name = "App Server 1"
@@ -118,13 +145,13 @@ resource "aws_instance" "appserver1" {
 }
 
 resource "aws_instance" "appserver2" {
-  ami                    = "ami-08d4ac5b634553e16"
+  ami                    = "ami-07eaf27c7c4a884cf"
   instance_type          = "t2.micro"
-  availability_zone      = "us-east-1b"
+  availability_zone      = "ap-south-1b"
   vpc_security_group_ids = [aws_security_group.appserver-sg.id]
   subnet_id              = module.vpc.private_subnets[1]
   key_name               = "demo-key"
-  user_data              = file("install.sh")
+    user_data              = "${file("./install-nginx.sh")}"
   tags = {
     Name = "App Server 2"
   }
@@ -133,7 +160,7 @@ resource "aws_instance" "appserver2" {
 
 
 resource "aws_lb" "app-elb" {
-  name               = "External-LB-new"
+  name               = "app-alb-new"
   internal           = false
   load_balancer_type = "application"
   security_groups    = [aws_security_group.web-sg.id]
@@ -141,7 +168,7 @@ resource "aws_lb" "app-elb" {
 }
 
 resource "aws_lb_target_group" "app-elb" {
-  name     = "APP-TG-new"
+  name     = "app-tg-latest"
   port     = 80
   protocol = "HTTP"
   vpc_id   = module.vpc.vpc_id
@@ -176,18 +203,6 @@ resource "aws_lb_target_group_attachment" "external-elb2" {
     aws_instance.appserver2,
   ]
 }
-
-resource "aws_lb_listener" "external-elb" {
-  load_balancer_arn = aws_lb.app-elb.arn
-  port              = "80"
-  protocol          = "HTTP"
-
-  default_action {
-    type             = "forward"
-    target_group_arn = aws_lb_target_group.app-elb.arn
-  }
-}
-
 resource "aws_security_group" "database-sg" {
   name        = "Database-SG"
   description = "Allow inbound traffic from application layer"
@@ -235,8 +250,13 @@ resource "aws_db_subnet_group" "default" {
     Name = "My DB subnet group"
   }
 }
+resource "aws_lb_listener" "external-elb" {
+  load_balancer_arn = aws_lb.app-elb.arn
+  port              = "80"
+  protocol          = "HTTP"
 
-output "lb_dns_name" {
-  description = "The DNS name of the load balancer"
-  value       = aws_lb.app-elb.dns_name
+  default_action {
+    type             = "forward"
+    target_group_arn = aws_lb_target_group.app-elb.arn
+  }
 }
