@@ -5,3 +5,4 @@ Wep and App instances have docker container running on them on port 80 mapped to
 DEPLOYMENT STRATEGY:
 Blue green can be done here by creating one more target group for alb.
 We can deploy code to new tg , test it then switch traffic to green tg . If any issues we can roll back deployment to blue tg.
+
